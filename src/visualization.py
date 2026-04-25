@@ -58,7 +58,8 @@ def fig_ipress_distribution(df):
     be unreadable. This chart directly answers Q1 at a national level.
     """
     fig, ax = plt.subplots(figsize=(9, 5))
-    sns.histplot(df["n_ipress"], bins=40, kde=True, color="#2171b5", ax=ax)
+    sns.histplot(df["n_ipress"], bins=40, kde=True, color="#2171b5", ax=ax,
+                 kde_kws={"clip": (0, df["n_ipress"].max())})
     ax.axvline(df["n_ipress"].median(), color="red", ls="--", lw=1.5,
                label="Median = {:.0f}".format(df["n_ipress"].median()))
     ax.axvline(df["n_ipress"].mean(), color="orange", ls="--", lw=1.5,
@@ -82,24 +83,50 @@ def fig_top_bottom_facilities(df, n=20):
     A map alone would not communicate exact rankings. This directly names
     the districts that Q1 asks about.
     """
-    top = df.nsmallest(n, "rank_baseline")[["distrito", "departamen", "n_ipress"]].copy()
-    bot = df.nlargest(n, "rank_baseline")[["distrito", "departamen", "n_ipress"]].copy()
+    top = df.nsmallest(n, "rank_baseline")[
+        ["distrito", "departamen", "n_ipress", "mean_dist_km"]].copy()
+    bot = df.nlargest(n, "rank_baseline")[
+        ["distrito", "departamen", "n_ipress", "mean_dist_km"]].copy()
+
+    # Sort ascending so barh places the largest value at the top (last item = top)
+    top = top.sort_values("n_ipress", ascending=True)
+    bot = bot.sort_values("mean_dist_km", ascending=True, na_position="first")
+
     top["label"] = top["distrito"] + " (" + top["departamen"] + ")"
     bot["label"] = bot["distrito"] + " (" + bot["departamen"] + ")"
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-    axes[0].barh(top["label"][::-1], top["n_ipress"][::-1], color="#1a9850")
-    axes[0].set(title="Top {} Best-Served Districts".format(n),
+    # Convert to plain lists to avoid pandas index misalignment in barh
+    top_labels = top["label"].tolist()
+    top_values = top["n_ipress"].tolist()
+    bot_labels = bot["label"].tolist()
+    bot_values = bot["mean_dist_km"].fillna(0).tolist()
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 12))
+
+    # Left: best-served by n_ipress (largest at top)
+    axes[0].barh(top_labels, top_values, color="#1a9850")
+    axes[0].set(title="Top {} Best-Served Districts\n(# IPRESS facilities)".format(n),
                 xlabel="Number of IPRESS")
-    axes[1].barh(bot["label"][::-1], bot["n_ipress"][::-1], color="#d73027")
-    axes[1].set(title="Top {} Most Underserved Districts".format(n),
-                xlabel="Number of IPRESS")
+
+    # Right: most underserved by mean distance (largest distance at top)
+    axes[1].barh(bot_labels, bot_values, color="#d73027")
+    axes[1].set(title="Top {} Most Underserved Districts\n(Mean distance to nearest IPRESS, km)".format(n),
+                xlabel="Mean Distance to Nearest IPRESS (km)")
+
     for ax in axes:
-        ax.tick_params(axis="y", labelsize=8)
+        ax.tick_params(axis="y", labelsize=9)
     fig.suptitle("Territorial Availability: Facility Count Extremes", fontsize=13)
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0.04, 1, 1])
+
+    # Footnote about districts with no spatial distance data (placed after tight_layout)
+    nan_districts = bot[bot["mean_dist_km"].isna()]["distrito"].tolist()
+    if nan_districts:
+        note = "* {}: no spatial distance data available (shown as 0 km).".format(
+            " and ".join(nan_districts))
+        fig.text(0.52, 0.01, note, fontsize=8, color="dimgray",
+                 style="italic", ha="left", va="bottom")
     path = os.path.join(FIGURES_DIR, "fig2_top_bottom_facilities.png")
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print("[FIG2] Saved:", os.path.basename(path))
 
@@ -141,7 +168,8 @@ def fig_distance_distribution(df):
     """
     fig, ax = plt.subplots(figsize=(9, 5))
     vals = df["mean_dist_km"].dropna()
-    sns.histplot(vals, bins=50, kde=True, color="#6baed6", ax=ax)
+    sns.histplot(vals, bins=50, kde=True, color="#6baed6", ax=ax,
+                 kde_kws={"clip": (0, vals.max())})
     ax.axvline(5,  color="red",    ls="--", lw=1.5, label="5 km threshold")
     ax.axvline(10, color="orange", ls="--", lw=1.5, label="10 km threshold")
     ax.axvline(vals.median(), color="black", ls=":", lw=1.5,
@@ -193,30 +221,56 @@ def fig_score_ranking(df, n=25):
     tier make the ranking immediately interpretable. A table alone would
     not convey the magnitude differences. Directly answers Q3.
     """
+    # Sort ascending so barh places largest bar at top; convert to lists to avoid index misalignment
     top = df.nsmallest(n, "rank_baseline").copy()
     bot = df.nlargest(n, "rank_baseline").copy()
 
+    top = top.sort_values("score_baseline", ascending=True)
+    bot = bot.sort_values("mean_dist_km", ascending=True, na_position="first")
+
     for sub in [top, bot]:
-        sub["label"] = sub["distrito"] + "\n(" + sub["departamen"] + ")"
+        sub["label"] = sub["distrito"] + " (" + sub["departamen"] + ")"
 
-    fig, axes = plt.subplots(1, 2, figsize=(18, 10))
-    colors_top = [PALETTE[c] for c in top["class_baseline"]]
-    colors_bot = [PALETTE[c] for c in bot["class_baseline"]]
+    top_labels  = top["label"].tolist()
+    top_scores  = top["score_baseline"].tolist()
+    top_colors  = [PALETTE[c] for c in top["class_baseline"].tolist()]
+    bot_labels  = bot["label"].tolist()
+    bot_dists   = bot["mean_dist_km"].fillna(0).tolist()
+    bot_colors  = [PALETTE[c] for c in bot["class_baseline"].tolist()]
 
-    axes[0].barh(top["label"][::-1], top["score_baseline"][::-1], color=colors_top[::-1])
-    axes[0].set(title="Top {} Best-Served (Baseline Score)".format(n),
-                xlabel="Access Score")
+    # Larger figure + smaller font to avoid label cramming with 25 districts
+    fig, axes = plt.subplots(1, 2, figsize=(22, 16))
 
-    axes[1].barh(bot["label"][::-1], bot["score_baseline"][::-1], color=colors_bot[::-1])
-    axes[1].set(title="Top {} Most Underserved (Baseline Score)".format(n),
-                xlabel="Access Score")
+    # Left: best-served by composite score (all Well-served → green)
+    axes[0].barh(top_labels, top_scores, color=top_colors)
+    axes[0].set(title="Top {} Best-Served\n(Baseline Composite Score)".format(n),
+                xlabel="Access Score (0=worst, 1=best)")
+    axes[0].tick_params(axis="y", labelsize=8)
+    axes[0].text(0.98, 0.02, "All districts: Well-served",
+                 transform=axes[0].transAxes, fontsize=8, color="#1a9850",
+                 ha="right", va="bottom", style="italic")
 
-    patches = [mpatches.Patch(color=v, label=k) for k, v in PALETTE.items()]
-    fig.legend(handles=patches, loc="lower center", ncol=3, title="Classification")
+    # Right: most underserved ranked by mean distance (score=0 for all → distance is informative)
+    axes[1].barh(bot_labels, bot_dists, color=bot_colors)
+    axes[1].set(title="Top {} Most Underserved\n(Mean Distance to Nearest IPRESS, km)".format(n),
+                xlabel="Mean Distance (km) — higher = worse access")
+    axes[1].tick_params(axis="y", labelsize=8)
+    axes[1].text(0.98, 0.02, "All districts: Underserved",
+                 transform=axes[1].transAxes, fontsize=8, color="#d73027",
+                 ha="right", va="bottom", style="italic")
+
+    # Footnote for districts with no spatial data
+    nan_bot = bot[bot["mean_dist_km"].isna()]["distrito"].tolist()
+    if nan_bot:
+        note = "* {}: no spatial distance data available (shown as 0 km).".format(
+            " and ".join(nan_bot))
+        fig.text(0.52, 0.01, note, fontsize=8, color="dimgray",
+                 style="italic", ha="left", va="bottom")
+
     fig.suptitle("District Comparison: Emergency Healthcare Access Score", fontsize=13)
-    fig.tight_layout(rect=[0, 0.05, 1, 1])
+    fig.tight_layout(rect=[0, 0.03, 1, 1])
     path = os.path.join(FIGURES_DIR, "fig6_score_ranking.png")
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print("[FIG6] Saved:", os.path.basename(path))
 

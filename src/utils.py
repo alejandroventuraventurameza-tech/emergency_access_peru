@@ -75,8 +75,10 @@ def folium_choropleth(gdf, column, title, cmap="RdYlGn", tooltip_fields=None):
     center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
     m = folium.Map(location=center, zoom_start=5, tiles="CartoDB positron")
 
-    gdf_json = gdf[["ubigeo", "distrito", "departamen", column,
-                     "geometry"]].copy()
+    # Build column list: base cols + any extra tooltip fields that exist in gdf
+    base_cols = ["ubigeo", "distrito", "departamen", column, "geometry"]
+    extra_cols = [f for f in (tooltip_fields or []) if f in gdf.columns and f not in base_cols]
+    gdf_json = gdf[base_cols + extra_cols].copy()
     gdf_json = gdf_json.dropna(subset=[column])
 
     folium.Choropleth(

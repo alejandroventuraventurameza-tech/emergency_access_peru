@@ -393,8 +393,14 @@ with tab4:
 
         st_html(map_to_html(m), height=600, scrolling=False)
 
-    # Spec comparison
-    st.subheader("Baseline vs Alternative: District Comparison")
+    # ── Sensitivity analysis (separate section, not per-map) ──────────────────
+    st.divider()
+    st.header("📈 Sensitivity Analysis: Baseline vs Alternative")
+    st.markdown("""
+    This section is independent of the map above. It compares how each district's
+    classification changes when the alternative specification is applied instead
+    of the baseline (different weights, 10 km threshold, 2025 data).
+    """)
     comp = get_comparison()
 
     col1, col2 = st.columns([2, 1])
