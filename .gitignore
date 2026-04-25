@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+
+# Processed debris (zero-byte files from filesystem limitations)
+data/processed/ccpp_clean.geojson
+data/processed/distritos_clean.geojson
+data/processed/ccpp_clean.gpkg
+data/processed/ccpp_clean.gpkg-journal
+data/processed/test.parquet
+data/processed/test.txt
+
+# OS
+.DS_Store
+Thumbs.db
